@@ -8,7 +8,7 @@ namespace L5Sharp.Tests.Core
         [Test]
         public void SampleQuery001()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
             var results = content.Query<Tag>()
                 .SelectMany(t => t.Members())
@@ -23,7 +23,7 @@ namespace L5Sharp.Tests.Core
         [Test]
         public void SampleQuery002()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
             var results = content.Query<Tag>()
                 .SelectMany(t => t.Members())
@@ -37,7 +37,7 @@ namespace L5Sharp.Tests.Core
         [Test]
         public void SampleQuery003()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
             var results = content.Query<Tag>().Where(t => t.Scope.IsLocal && t.DataType == "DINT");
 
@@ -47,9 +47,9 @@ namespace L5Sharp.Tests.Core
         [Test]
         public void AddComponents()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
-            var count = content.Tags.Count();
+            var count = content.Tags.Count;
 
             content.Tags.AddRange(new List<Tag>
             {
@@ -58,35 +58,32 @@ namespace L5Sharp.Tests.Core
                 new() { Name = "tag03", Value = "This is a string tag value" }
             });
 
-            content.Tags.Count().Should().Be(count + 3);
+            content.Tags.Count.Should().Be(count + 3);
         }
 
         [Test]
         public void GetControllerProperties()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
             var controller = content.Controller;
 
             controller.Name.Should().Be("TestController");
             controller.ProcessorType.Should().Be("1756-L83E");
             controller.Description.Should().Be("This is a test project");
-            controller.Revision.Should().Be(new Revision(32, 11));
+            controller.Revision.Should().Be(new Revision(36, 11));
             controller.RedundancyInfo?.Enabled.Should().BeFalse();
         }
 
         [Test]
         public void AccessMultidimensionalArray()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
             var tags = content.Tags.Get("MultiDimensionalArray");
 
-            var array = tags.Value.As<ArrayData>().Cast<DINT>();
+            var array = tags.Value.As<ArrayData>();
 
-            array.Should().NotBeNull();
-            array.Should().BeOfType<ArrayData<DINT>>();
-            array.Members.ToList().Should().NotBeEmpty();
             array[0, 0].Should().NotBeNull();
             array[0, 0].Should().Be(0);
             array[2, 4].Should().NotBeNull();
@@ -96,7 +93,7 @@ namespace L5Sharp.Tests.Core
         [Test]
         public void GetComponentByName()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
             var type = content.DataTypes.Get("AlarmType");
 
@@ -107,11 +104,11 @@ namespace L5Sharp.Tests.Core
         }
 
         [Test]
-        public void QueryAllRungsAndSelectDistinctTagNamesFromTheNeutralTextValue()
+        public void QueryAllRungsAndSelectDistinctTagNames()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
-            var results = content.Query<Rung>().SelectMany(t => t.Text.Tags()).Distinct().ToList();
+            var results = content.Query<Rung>().SelectMany(r => r.Tags()).Distinct().ToList();
 
             results.Should().NotBeEmpty();
         }
@@ -119,10 +116,10 @@ namespace L5Sharp.Tests.Core
         [Test]
         public void QueryAllRungsAndGetTagsInMovInstruction()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
             var results = content.Query<Rung>()
-                .SelectMany(r => r.Text.TagsIn("MOV"))
+                .SelectMany(r => r.Instructions().Where(i => i.Key == "MOVE").SelectMany(x => x.Arguments))
                 .ToList();
 
             results.Should().NotBeEmpty();
@@ -131,13 +128,13 @@ namespace L5Sharp.Tests.Core
         [Test]
         public void SomeMoreTagQueriesAcrossTheL5XFile()
         {
-            var content = L5X.Load(Known.Test);
+            var content = TestContent.Test;
 
             var allTags = content.Query<Tag>().ToList();
 
-            var programTags = allTags.Where(t => t.Scope.IsLocal);
+            var programTags = allTags.Where(t => t.Scope.Level == ScopeLevel.Program);
             var ioTags = allTags.Where(t => t.Name.Contains(':'));
-            var readWriteTags = allTags.Where(t => t.ExternalAccess?.Equals(ExternalAccess.ReadWrite) is true);
+            var readWriteTags = allTags.Where(t => t.ExternalAccess?.Equals(Access.ReadWrite) is true);
             var timerTags = allTags.Where(t => t.DataType == "TIMER");
 
             programTags.Should().NotBeEmpty();

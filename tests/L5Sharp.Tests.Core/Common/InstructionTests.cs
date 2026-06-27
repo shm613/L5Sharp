@@ -6,223 +6,54 @@ namespace L5Sharp.Tests.Core.Common
     public class InstructionTests
     {
         [Test]
-        public void New_ValidKey_ShouldNotBeNull()
+        public void New_Null_ShouldThrowException()
         {
-            var instruction = Instruction.New("Test");
-
-            instruction.Should().NotBeNull();
+            FluentActions.Invoking(() => _ = new Instruction(null!)).Should().Throw<ArgumentException>();
         }
 
         [Test]
-        public void New_ValidKey_ShouldHaveExpectedDefaults()
+        public void New_EmptyString_ShouldThrowException()
         {
-            var instruction = Instruction.New("Test");
+            FluentActions.Invoking(() => _ = new Instruction(string.Empty)).Should().Throw<ArgumentException>();
+        }
 
+        [Test]
+        public void New_KeyNoArgs_ShouldHaveExpectedValues()
+        {
+            var instruction = new Instruction("Test", []);
+
+            instruction.Should().Be("Test()");
             instruction.Key.Should().Be("Test");
-            instruction.Signature.Should().Be("Test()");
             instruction.Arguments.Should().BeEmpty();
-            instruction.Operands.Should().BeEmpty();
-            instruction.Text.Should().Be("Test()");
+            instruction.IsDesctructive.Should().BeTrue();
             instruction.IsConditional.Should().BeFalse();
-            instruction.IsValid.Should().BeTrue();
+            instruction.IsNative.Should().BeFalse();
         }
 
         [Test]
-        public void Keys_WhenCalled_ShouldNotBeEmpty()
+        public void New_KeyAndArgs_ShouldHaveExpectedValues()
         {
-            var known = Instruction.Keys();
+            var instruction = new Instruction("Test", "arg1", "arg2", 100);
 
-            known.Should().NotBeEmpty();
-        }
-
-        [Test]
-        public void XIC_WhenCalled_ShouldBeExpectedProperties()
-        {
-            var instruction = Instruction.XIC("MyTag");
-
-            instruction.Key.Should().Be("XIC");
-            instruction.Signature.Should().Be("XIC(data_bit)");
-            instruction.Arguments.Should().HaveCount(1);
-            instruction.Operands.Should().HaveCount(1);
-            instruction.Text.Should().Be("XIC(MyTag)");
-            instruction.IsConditional.Should().BeTrue();
-            instruction.IsValid.Should().BeTrue();
-        }
-
-        [Test]
-        public void OTE_WhenCalled_ShouldBeExpectedProperties()
-        {
-            var instruction = Instruction.OTE("MyTag");
-
-            instruction.Key.Should().Be("OTE");
-            instruction.Signature.Should().Contain("OTE(data_bit)");
-            instruction.Arguments.Should().HaveCount(1);
-            instruction.Operands.Should().HaveCount(1);
-            instruction.Text.Should().Be("OTE(MyTag)");
-            instruction.IsConditional.Should().BeFalse();
-            instruction.IsValid.Should().BeTrue();
-        }
-
-        [Test]
-        public void TON_ValidArgs_ShouldHaveExpectedValues()
-        {
-            var instruction = Instruction.TON("SomeTimer", 5000, 0);
-
-            instruction.Key.Should().Be("TON");
-            instruction.Signature.Should().Contain("TON(timer,preset,accum)");
+            instruction.Should().Be("Test(arg1,arg2,100)");
+            instruction.Key.Should().Be("Test");
             instruction.Arguments.Should().HaveCount(3);
-            instruction.Operands.Should().HaveCount(3);
-            instruction.Text.Should().Be("TON(SomeTimer,5000,0)");
+            instruction.IsDesctructive.Should().BeTrue();
             instruction.IsConditional.Should().BeFalse();
-            instruction.IsValid.Should().BeTrue();
+            instruction.IsNative.Should().BeFalse();
         }
 
         [Test]
-        public void JSR_WhenCalled_ShouldBeExpectedProperties()
+        public void New_NativeInstruction_ShouldHaveExpectedValues()
         {
-            var instruction = Instruction.JSR("Routine", 1, "In1", "Out1");
+            var instruction = new Instruction("XIC", "MyTag");
 
-            instruction.Key.Should().Be("JSR");
-            instruction.Signature.Should()
-                .Contain("JSR(routine_name,number_of_inputs,input_1,input_n,return_1,return_n)");
-            instruction.Arguments.Should().HaveCount(4);
-            instruction.Operands.Should().HaveCount(6);
-            instruction.Text.Should().Be("JSR(Routine,1,In1,Out1)");
-            instruction.IsConditional.Should().BeFalse();
-            instruction.IsValid.Should().BeTrue();
-        }
-
-        [Test]
-        public void EVENT_WhenCalled_ShouldBeExpectedProperties()
-        {
-            var instruction = Instruction.EVENT("MyTask");
-
-            instruction.Key.Should().Be("EVENT");
-            instruction.Signature.Should().Contain("EVENT(task)");
+            instruction.Should().Be("XIC(MyTag)");
+            instruction.Key.Should().Be("XIC");
             instruction.Arguments.Should().HaveCount(1);
-            instruction.Operands.Should().HaveCount(1);
-            instruction.Text.Should().Be("EVENT(MyTask)");
-            instruction.IsConditional.Should().BeFalse();
-            instruction.IsValid.Should().BeTrue();
-        }
-
-        [Test]
-        public void Tags_SimpleInstruction_ShouldHaveExpected()
-        {
-            var instruction = Instruction.MOVE("MyTagValue", "SomeTagName.Member.Value");
-
-            var tags = instruction.Tags;
-
-            tags.Should().HaveCount(2);
-            tags[0].Should().Be("MyTagValue");
-            tags[1].Should().Be("SomeTagName.Member.Value");
-        }
-
-        [Test]
-        public void Tags_TaskReference_ShouldBeExpected()
-        {
-            var instruction = Instruction.EVENT("MyTask");
-
-            var tags = instruction.Tags;
-
-            tags.Should().BeEmpty();
-        }
-
-        [Test]
-        public void Tags_RoutineReference_ShouldBeExpected()
-        {
-            var instruction = Instruction.JSR("Routine", 1, "In1", "Out1");
-
-            var tags = instruction.Tags;
-
-            tags.Should().HaveCount(2);
-            tags[0].Should().Be("In1");
-            tags[1].Should().Be("Out1");
-        }
-
-        [Test]
-        public void Tags_SystemInstruction_ShouldBeExpected()
-        {
-            var instruction = Instruction.GSV("Program", "MyProgram", "LastScanTime", "MyTagName");
-
-            var tags = instruction.Tags;
-
-            tags.Should().HaveCount(1);
-            tags[0].Should().Be("MyTagName");
-        }
-
-        [Test]
-        public void References_NormalInstruction_ShouldBeExpected()
-        {
-            var instruction = Instruction.MOVE("MyTagValue", "SomeTagName.Member.Value");
-
-            var references = instruction.References;
-
-            references.Should().HaveCount(2);
-            references[0].Type.Should().Be(ScopeType.Tag);
-            references[1].Type.Should().Be(ScopeType.Tag);
-        }
-
-        [Test]
-        public void References_TaskReference_ShouldBeExpected()
-        {
-            var instruction = Instruction.EVENT("MyTask");
-
-            var references = instruction.References;
-
-            references.Should().HaveCount(1);
-            references[0].Type.Should().Be(ScopeType.Task);
-        }
-
-        [Test]
-        public void References_RoutineReference_ShouldBeExpected()
-        {
-            var instruction = Instruction.JSR("Routine", 1, "In1", "Out1");
-
-            var references = instruction.References;
-
-            references.Should().HaveCount(3);
-            references[0].Type.Should().Be(ScopeType.Routine);
-            references[1].Type.Should().Be(ScopeType.Tag);
-            references[2].Type.Should().Be(ScopeType.Tag);
-        }
-
-        [Test]
-        public void References_SystemInstruction_ShouldBeExpected()
-        {
-            var instruction = Instruction.GSV("Program", "MyProgram", "LastScanTime", "MyTagName");
-
-            var references = instruction.References;
-
-            references.Should().HaveCount(2);
-            references[0].Type.Should().Be(ScopeType.Program);
-            references[0].Name.Should().Be("MyProgram");
-            references[1].Type.Should().Be(ScopeType.Tag);
-            references[1].Name.Should().Be("MyTagName");
-        }
-
-        [Test]
-        public void Of_ValidArguments_ShouldHaveExpectedTextAndArgumentsAndBeValid()
-        {
-            var instruction = Instruction.XIC("MyTag");
-
-            instruction = instruction.With("NewTag");
-
-            instruction.Arguments.Should().HaveCount(1);
-            instruction.Text.Should().Be("XIC(NewTag)");
-            instruction.IsValid.Should().BeTrue();
-        }
-
-        [Test]
-        public void Of_InvalidArgs_ShouldHaveExpectedTextAndArgumentsAndNotBeValid()
-        {
-            var instruction = Instruction.XIC("MyTag");
-
-            instruction = instruction.With("NewTag", "InvalidTag");
-
-            instruction.Arguments.Should().HaveCount(2);
-            instruction.Text.Should().Be("XIC(NewTag,InvalidTag)");
-            instruction.IsValid.Should().BeFalse();
+            instruction.IsConditional.Should().BeTrue();
+            instruction.IsDesctructive.Should().BeFalse();
+            instruction.IsNative.Should().BeTrue();
         }
 
         [Test]
@@ -233,9 +64,9 @@ namespace L5Sharp.Tests.Core.Common
         [TestCase("JSR(Routine,2,in1,in2,out1,out2,out3);", "JSR", 7)]
         [TestCase("SBR(Routine,in1,in2);", "SBR", 3)]
         [TestCase("RET(Routine,out1,out2);", "RET", 3)]
-        public void Parse_ValidInput_ShouldHaveExpectedKeyAndArguments(string text, string key, int args)
+        public void New_ValidFormats_ShouldHaveExpectedKeyAndArgumentCount(string text, string key, int args)
         {
-            var instruction = Instruction.Parse(text);
+            var instruction = new Instruction(text);
 
             instruction.Should().NotBeNull();
             instruction.Key.Should().Be(key);
@@ -243,9 +74,193 @@ namespace L5Sharp.Tests.Core.Common
         }
 
         [Test]
-        public void Parse_ExpressionTypeInput_ShouldThrowNewException()
+        [TestCase("Test")]
+        [TestCase("()")]
+        [TestCase("(SomeTag > 1.0)/100")]
+        [TestCase("ABS(SomeTag) / 100  > 1")]
+        public void IsValid_InvalidFormats_ShouldBeFalse(string text)
         {
-            FluentActions.Invoking(() => Instruction.Parse("(SomeTag > 1.0)/100")).Should().Throw<FormatException>();
+            var instruction = new Instruction(text);
+
+            instruction.IsValid.Should().BeFalse();
+        }
+
+        [Test]
+        public void Unknown_WhenCalled_ShouldBeExpected()
+        {
+            var instruction = Instruction.Unkown;
+
+            instruction.Should().Be("UNK");
+            instruction.Key.Should().Be("UNK");
+            instruction.Arguments.Should().BeEmpty();
+            instruction.IsConditional.Should().BeFalse();
+            instruction.IsDesctructive.Should().BeTrue();
+            instruction.IsNative.Should().BeFalse();
+        }
+
+        [Test]
+        public void XIC_WhenCalled_ShouldBeExpectedProperties()
+        {
+            var instruction = Instruction.XIC("MyTag");
+
+            instruction.Should().Be("XIC(MyTag)");
+            instruction.Key.Should().Be("XIC");
+            instruction.Arguments.Should().HaveCount(1);
+            instruction.IsConditional.Should().BeTrue();
+            instruction.IsDesctructive.Should().BeFalse();
+            instruction.IsNative.Should().BeTrue();
+        }
+
+        [Test]
+        public void OTE_WhenCalled_ShouldBeExpectedProperties()
+        {
+            var instruction = Instruction.OTE("MyTag");
+
+            instruction.Should().Be("OTE(MyTag)");
+            instruction.Key.Should().Be("OTE");
+            instruction.Arguments.Should().HaveCount(1);
+            instruction.IsDesctructive.Should().BeTrue();
+            instruction.IsNative.Should().BeTrue();
+        }
+
+        [Test]
+        public void TON_ValidArgs_ShouldHaveExpectedValues()
+        {
+            var instruction = Instruction.TON("SomeTimer", 5000, 0);
+
+            instruction.Should().Be("TON(SomeTimer,5000,0)");
+            instruction.Key.Should().Be("TON");
+            instruction.Arguments.Should().HaveCount(3);
+            instruction.IsDesctructive.Should().BeTrue();
+            instruction.IsNative.Should().BeTrue();
+        }
+
+        [Test]
+        public void JSR_WhenCalled_ShouldBeExpectedProperties()
+        {
+            var instruction = Instruction.JSR("RoutineName", 1, "In1", "Out1");
+
+            instruction.Should().Be("JSR(RoutineName,1,In1,Out1)");
+            instruction.Key.Should().Be("JSR");
+            instruction.Arguments.Should().HaveCount(4);
+            instruction.IsDesctructive.Should().BeTrue();
+            instruction.IsNative.Should().BeTrue();
+        }
+
+        [Test]
+        public void EVENT_WhenCalled_ShouldBeExpectedProperties()
+        {
+            var instruction = Instruction.EVENT("Event");
+
+            instruction.Should().Be("EVENT(Event)");
+            instruction.Key.Should().Be("EVENT");
+            instruction.Arguments.Should().HaveCount(1);
+            instruction.IsDesctructive.Should().BeTrue();
+            instruction.IsNative.Should().BeTrue();
+        }
+
+        [Test]
+        public void Arguments_SimpleInstruction_ShouldHaveExpected()
+        {
+            var instruction = Instruction.MOVE("MyTagValue", "SomeTagName.Member.Value");
+
+            var args = instruction.Arguments.ToArray();
+
+            args.Should().HaveCount(2);
+            args[0].Should().Be("MyTagValue");
+            args[1].Should().Be("SomeTagName.Member.Value");
+        }
+
+        [Test]
+        public void Arguments_TaskReference_ShouldBeExpected()
+        {
+            var instruction = Instruction.EVENT("MyTask");
+
+            var args = instruction.Arguments.ToArray();
+
+            args.Should().HaveCount(1);
+        }
+
+        [Test]
+        public void Arguments_RoutineReference_ShouldBeExpected()
+        {
+            var instruction = Instruction.JSR("Routine", 1, "In1", "Out1");
+
+            var args = instruction.Arguments.ToArray();
+
+            args.Should().HaveCount(4);
+            args[0].Should().Be("Routine");
+            args[1].Should().Be(1);
+            args[2].Should().Be("In1");
+            args[3].Should().Be("Out1");
+        }
+
+        [Test]
+        public void Arguments_SystemInstruction_ShouldBeExpected()
+        {
+            var instruction = Instruction.GSV("Program", "MyProgram", "LastScanTime", "MyTagName");
+
+            var args = instruction.Arguments.ToArray();
+
+            args.Should().HaveCount(4);
+        }
+
+        [Test]
+        public void With_NewTagArguments_ShouldUpdateArgument()
+        {
+            var instruction = Instruction.XIC("MyTag");
+
+            var updated = instruction.With("NewTag");
+
+            updated.Should().Be("XIC(NewTag)");
+            updated.Arguments.Should().Contain("NewTag");
+        }
+
+        [Test]
+        public void Append_ValidArgument_ShouldBeExpected()
+        {
+            var test = new Instruction("Test");
+
+            var result = test.Append("arg1");
+
+            result.Arguments.Should().HaveCount(1);
+            result.Arguments.Should().Contain("arg1");
+        }
+
+        [Test]
+        public void Append_MultipleArgs_ShouldBeExpected()
+        {
+            var test = new Instruction("Test");
+
+            var result = test.Append("arg1").Append(123);
+
+            result.Arguments.Should().HaveCount(2);
+            result.Arguments.Should().Contain("arg1");
+            result.Arguments.Should().Contain(123);
+        }
+
+        [Test]
+        public void Parse_WithComments_ShouldSkipComments()
+        {
+            var text = new NeutralText("XIC(MyTag) // trailing comment\n/* multi-line\ncomment */ OTE(MyOtherTag)");
+
+            var instructions = Instruction.Parse(text).ToList();
+
+            instructions.Should().HaveCount(2);
+            instructions[0].Key.Should().Be("XIC");
+            instructions[1].Key.Should().Be("OTE");
+        }
+
+        [Test]
+        [TestCase("XIC(MyTagKey);", 1)]
+        [TestCase("TON(SomeTimer,5000,0);", 1)]
+        [TestCase("JSR(Routine,2,in1,in2,out1,out2,out3);", 1)]
+        [TestCase("XIC(MySimpleTag) XIO(MyArrayTag[1]) OTE(MyComplexTag.Member.12);", 3)]
+        public void Read_ValidText_ShouldHaveExpectedCount(string text, int count)
+        {
+            var instructions = Instruction.Parse(text).ToArray();
+
+            instructions.Should().HaveCount(count);
         }
 
         [Test]
@@ -253,9 +268,9 @@ namespace L5Sharp.Tests.Core.Common
         {
             var instruction = Instruction.ADD(1, 1, "Test");
 
-            var argument = instruction.Argument("source_B");
+            var argument = instruction.Arguments.ToArray()[1];
 
-            argument.Should().NotBeNull();
+            argument.Should().Be("1");
         }
 
         [Test]
@@ -325,13 +340,13 @@ namespace L5Sharp.Tests.Core.Common
         }
 
         [Test]
-        public void GetHasCode_WhenCalled_ReturnsHasOfKey()
+        public void GetHashCode_WhenCalled_ReturnsHashOfInstructionText()
         {
             var instruction = Instruction.XIC("MyTag");
 
             var result = instruction.GetHashCode();
 
-            result.Should().Be(instruction.Text.GetHashCode());
+            result.Should().Be(StringComparer.OrdinalIgnoreCase.GetHashCode("XIC(MyTag)"));
         }
 
         [Test]

@@ -4,4 +4,7 @@
   <Ports>
     <Port Id="1" Type="ICP" Upstream="true" Address="1" />
   </Ports>
+  <Communications>
+    <Connections />
+  </Communications>
 </Module>

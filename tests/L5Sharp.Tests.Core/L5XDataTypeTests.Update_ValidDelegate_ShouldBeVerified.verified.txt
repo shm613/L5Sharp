@@ -17,8 +17,7 @@
         <Description><![CDATA[Test Int Array]]></Description>
       </Member>
       <Member Name="DintArray" DataType="DINT" Dimension="5" Radix="Hex" Hidden="false" ExternalAccess="Read/Write">
-        <Description><![CDATA[Test 
-Dint Array]]></Description>
+        <Description><![CDATA[Test Dint Array]]></Description>
       </Member>
       <Member Name="LintArray" DataType="LINT" Dimension="5" Radix="Date/Time" Hidden="false" ExternalAccess="Read/Write">
         <Description><![CDATA[Test Lint Array]]></Description>
@@ -81,14 +80,6 @@ Dint Array]]></Description>
     <Members>
       <Member Name="LEN" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write" />
       <Member Name="DATA" DataType="SINT" Dimension="23" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write" />
-    </Members>
-  </DataType>
-  <DataType Name="InvalidType" Family="NoFamily" Class="User">
-    <Description><![CDATA[This is an update test]]></Description>
-    <Members>
-      <Member Name="Invalid01" DataType="NULL" Dimension="0" Radix="NullType" Hidden="false" ExternalAccess="Read/Write">
-        <Description><![CDATA[Test]]></Description>
-      </Member>
     </Members>
   </DataType>
   <DataType Name="ModuleType" Family="NoFamily" Class="User">

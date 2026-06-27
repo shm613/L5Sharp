@@ -1,171 +1,219 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace L5Sharp.Core;
 
 /// <summary>
-/// A thin wrapper around the textual representation of logic notation called neutral text. This could represent a
-/// single instruction signature, a rung of logic (combination of instructions), or a line of structured text. The
-/// purpose of this class is to provide a way to parse the text into strongly typed objects that are easier to work with. 
+/// Represents case-insensitive text that can be tokenized into neutral tokens for parsing operations.
+/// This class provides string comparison using ordinal case-insensitive rules and supports tokenization
+/// of Logix programming language syntax, including operators, identifiers, literals, and structural elements.
 /// </summary>
-/// <remarks>
-/// Neutral text can represent a single instruction or a full rung (collection of instructions).
-/// Each instruction contains sets of tag names and values known as arguments or operands.
-/// This class provides functions for extracting the textual information into strongly type classes that are easier
-/// to work with.
-/// </remarks>
-/// <seealso cref="Instruction"/>
-/// <seealso cref="TagName"/>
-/// <seealso cref="Keyword"/>
-public sealed class NeutralText : ILogixParsable<NeutralText>
+public class NeutralText
 {
+    /// <summary>
+    /// The underlying text value stored in this NeutralText instance.
+    /// </summary>
     private readonly string _text;
 
     /// <summary>
-    /// Creates a new <see cref="NeutralText"/> object with the provided text input.
+    /// Initializes a new instance of the <see cref="NeutralText"/> class with the specified text value.
     /// </summary>
-    /// <param name="text">A string input that represents a neutral text format.</param>
-    /// <exception cref="ArgumentNullException">When text is null.</exception>
-    /// <exception cref="FormatException">When text is null.</exception>
+    /// <param name="text">The text value to wrap. Cannot be null.</param>
     public NeutralText(string text)
     {
         _text = text ?? throw new ArgumentNullException(nameof(text));
     }
 
     /// <summary>
-    /// Indicates whether the current neutral text value has balanced brackets and parentheses.
+    /// Tokenizes the text into a sequence of neutral tokens representing operators, identifiers, literals,
+    /// structural elements, and string literals. Whitespace is ignored during tokenization.
     /// </summary>
-    /// <value><c>true</c> if the text has balanced brackets and parentheses; otherwise, <c>false</c>.</value>
-    public bool IsBalanced => TextIsBalanced(_text, '[', ']') && TextIsBalanced(_text, '(', ')');
-
-    /// <summary>
-    /// Indicates whether the current neutral text value is an empty string.
-    /// </summary>
-    /// <value><c>true</c> if the text empty; otherwise <c>false</c>.</value>
-    public bool IsEmpty => _text.IsEquivalent(string.Empty);
-
-    /// <summary>
-    /// Represents a new empty instance of the <see cref="NeutralText"/>.
-    /// </summary>
-    /// <returns>An empty <see cref="NeutralText"/> object.</returns>
-    public static NeutralText Empty => new(string.Empty);
-
-    /// <summary>
-    /// Parses the provided string into a <see cref="NeutralText"/> value.
-    /// </summary>
-    /// <param name="value">The string to parse.</param>
-    /// <returns>A <see cref="NeutralText"/> representing the parsed value.</returns>
-    public static NeutralText Parse(string value) => new(value);
-
-    /// <summary>
-    /// Tries to parse the provided string into a <see cref="NeutralText"/> value.
-    /// </summary>
-    /// <param name="value">The string to parse.</param>
-    /// <returns>A <see cref="NeutralText"/> representing the parsed value if successful; Otherwise, <c>null</c>.</returns>
-    public static NeutralText? TryParse(string? value) => value is not null ? new NeutralText(value) : null;
-
-    /// <summary>
-    /// Returns a value indicating whether a specified instruction key occurs within this neutral text.
-    /// </summary>
-    /// <param name="value">The instruction name to seek.</param>
-    /// <returns><c>true</c> if this text contains the instruction key; otherwise, false.</returns>
-    public bool Contains(string value) => _text.Contains(value);
-
-    /// <summary>
-    /// Runs the provided regex pattern against the neutral text and indicates whether the patterns are matched.
-    /// </summary>
-    /// <param name="regex">The regex pattern to test against.</param>
-    /// <returns><c>true</c> if <c>regex</c> is a match against this neutral text value.</returns>
-    public bool HasPattern(string regex) => Regex.IsMatch(_text, regex);
-
-    /// <summary>
-    /// Returns a collection of <see cref="Instruction"/> objects that were found in the current neutral text value.
-    /// </summary>
-    /// <returns>An <see cref="IEnumerable{T}"/> containing <see cref="Instruction"/> objects found in the text.</returns>
-    public IEnumerable<Instruction> Instructions()
+    /// <returns>An enumerable sequence of <see cref="NeutralToken"/> instances representing the parsed tokens,
+    /// terminated with an EOF token.</returns>
+    /// <exception cref="ArgumentException">Thrown when an unrecognized character is encountered during tokenization.</exception>
+    public IEnumerable<NeutralToken> Tokenize()
     {
-        // ReSharper disable once RedundantEnumerableCastCall required for .NET Standard
-        return Regex.Matches(_text, Instruction.Pattern).Cast<Match>().Select(m => Instruction.Parse(m.Value));
-    }
+        var position = 0;
 
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="key"></param>
-    /// <returns></returns>
-    public IEnumerable<Instruction> Instructions(string key)
-    {
-        var matches = Regex.Matches(_text, Instruction.Pattern);
-
-        foreach (Match match in matches)
+        while (position < _text.Length)
         {
-            var instruction = Instruction.Parse(match.Value);
-            if (instruction.Key != key) continue;
-            yield return instruction;
+            var current = _text[position];
+
+            if (char.IsWhiteSpace(current))
+            {
+                position++;
+                continue;
+            }
+
+            var token = current switch
+            {
+                // Handle comments first
+                '/' when PeekNext(_text, position) is '/' => ConsumeComment(_text, ref position),
+                '/' when PeekNext(_text, position) is '*' => ConsumeComment(_text, ref position),
+                // Handle special case 2 character operators
+                ':' when PeekNext(_text, position) is '=' => Consume(_text, ref position, 2),
+                '<' or '>' when PeekNext(_text, position) is '=' => Consume(_text, ref position, 2),
+                '<' when PeekNext(_text, position) is '>' => Consume(_text, ref position, 2),
+                '*' when PeekNext(_text, position) is '*' => Consume(_text, ref position, 2),
+                // Handle all other single character operators
+                _ when IsOperator(current) => Consume(_text, ref position),
+                _ when IsStructural(current) => Consume(_text, ref position),
+                _ when IsString(current) => ConsumeString(_text, ref position),
+                _ when char.IsDigit(current) => ConsumeWhile(_text, ref position, IsLiteral),
+                _ when char.IsLetter(current) || current is '_' => ConsumeWhile(_text, ref position, IsIdentifier),
+                _ => throw new ArgumentException(
+                    $"Unexpected character '{current}' at position {position} of text: {_text}")
+            };
+
+            yield return token;
         }
+
+        yield return new NeutralToken(TokenType.EOF, string.Empty, position);
+        yield break;
+
+        bool IsOperator(char c) => c is '+' or '-' or '/' or '*' or '=' or '<' or '>';
+        bool IsStructural(char c) => c is '(' or ')' or '[' or ']' or ',' or '.' or ':' or ';' or '?';
+        bool IsString(char c) => c is '\'';
+        bool IsLiteral(char c) => char.IsLetterOrDigit(c) || c is '#' or '.';
+        bool IsIdentifier(char c) => char.IsLetterOrDigit(c) || c is '_';
     }
 
     /// <summary>
-    /// Returns a collection of <see cref="Instruction"/> objects that were found in the current neutral text value.
+    /// Consumes a specified number of characters from the given text, starting at the current position,
+    /// and creates a <see cref="NeutralToken"/> representing the consumed text.
     /// </summary>
-    /// <returns>An <see cref="IEnumerable{T}"/> containing <see cref="Instruction"/> objects found in the text.</returns>
-    public IEnumerable<Instruction> Instructions(Instruction instruction)
+    /// <param name="text">The source text to consume characters from.</param>
+    /// <param name="position">A reference to the current position within the text, updated as characters are consumed.</param>
+    /// <param name="count">The number of characters to consume, with a default value of 1.</param>
+    /// <returns>A <see cref="NeutralToken"/> representing the consumed text and its type.</returns>
+    private static NeutralToken Consume(string text, ref int position, int count = 1)
     {
-        var matches = Regex.Matches(_text, Instruction.Pattern);
+        var start = position;
 
-        foreach (Match match in matches)
+        while (position < text.Length && position - start < count)
+            position++;
+
+        var token = text.Substring(start, position - start);
+        var type = TokenType.FromToken(token);
+        return new NeutralToken(type, token, start);
+    }
+
+    /// <summary>
+    /// Consumes characters from the input text starting from the given position until the specified condition is no longer met,
+    /// and returns a parsed <see cref="NeutralToken"/>.
+    /// </summary>
+    /// <param name="text">The input text being parsed.</param>
+    /// <param name="position">
+    /// A reference to the current index within the <paramref name="text"/>. This value will be updated to point to the position
+    /// immediately after the last character consumed.
+    /// </param>
+    /// <param name="condition">
+    /// A function that determines the condition for consuming characters. Characters will continue to be consumed
+    /// as long as this function returns <see langword="true"/>.
+    /// </param>
+    /// <returns>
+    /// A <see cref="NeutralToken"/> representing the consumed characters, including their type, value, and position within the text.
+    /// </returns>
+    private static NeutralToken ConsumeWhile(string text, ref int position, Func<char, bool> condition)
+    {
+        var start = position;
+
+        while (position < text.Length && condition.Invoke(text[position]))
+            position++;
+
+        var token = text.Substring(start, position - start);
+        var type = TokenType.FromToken(token);
+        return new NeutralToken(type, token, start);
+    }
+
+    /// <summary>
+    /// Processes a substring within the provided text, starting from the current position, and consumes characters
+    /// until the closing quote of a string literal is reached.
+    /// </summary>
+    /// <param name="text">The input text from which the string is consumed. Cannot be null.</param>
+    /// <param name="position">
+    /// A reference to the current position in the text being processed. The position will be updated to point
+    /// to the next character after the closing quote upon method completion.
+    /// </param>
+    /// <returns>A <see cref="NeutralToken"/> representing the consumed string literal, including its type, value, and starting index.</returns>
+    private static NeutralToken ConsumeString(string text, ref int position)
+    {
+        var start = position;
+        position++; // Consume opening quote before detecting closing quote
+
+        while (position < text.Length)
         {
-            var i = Instruction.Parse(match.Value);
-            if (i != instruction) continue;
-            yield return i;
+            // Closing quote without a previous escape character is the terminal position for the string.
+            if (text[position] is '\'' && text[position - 1] is not '$')
+            {
+                position++;
+                break;
+            }
+
+            position++;
         }
+
+        var token = text.Substring(start, position - start);
+        return new NeutralToken(TokenType.Literal, token, start);
     }
 
     /// <summary>
-    /// Gets a collection of keywords found in the current neutral text.
+    /// Consumes a comment from the provided text starting at the given position.
+    /// Supports both single-line ('//') and multi-line ('/* */') comment formats.
     /// </summary>
-    /// <returns>A <see cref="IEnumerable{T}"/> containing <see cref="Keyword"/> values found.</returns>
-    public IEnumerable<Keyword> Keywords()
+    /// <param name="text">The text to parse, containing the comment. Cannot be null or empty.</param>
+    /// <param name="position">
+    /// The current position in the text where the comment begins.
+    /// This value will be updated to reflect the position after the comment is consumed.
+    /// </param>
+    /// <returns>
+    /// A <see cref="NeutralToken"/> representing the consumed comment, including its type, value, and starting index.
+    /// </returns>
+    private static NeutralToken ConsumeComment(string text, ref int position)
     {
-        return Keyword.All().Where(k => _text.Contains(k.Value));
-    }
+        var isMultiLine = text[position + 1] == '*';
+        var start = position;
+        position += 2; // skip /*
 
-    /// <summary>
-    /// Gets a collection of tag names found in the current neutral text.
-    /// </summary>
-    /// <returns>A <see cref="IEnumerable{T}"/> of <see cref="TagName"/> values that were in from the current text.</returns>
-    /// <seealso cref="TagsIn(string)"/>
-    public IEnumerable<TagName> Tags()
-    {
-        var matches = Regex.Matches(_text, TagName.SearchPattern);
-        
-        foreach (Match match in matches)
+        while (position < text.Length)
         {
-            yield return new TagName(match.Value);
+            if (isMultiLine && text[position] is '*' && PeekNext(text, position) is '/')
+            {
+                position += 2;
+                break;
+            }
+
+            if (!isMultiLine && text[position] is '\n' or '\r')
+            {
+                position++;
+                break;
+            }
+
+            position++;
         }
+
+        var token = text.Substring(start, position - start);
+        return new NeutralToken(TokenType.Comment, token, start);
     }
 
     /// <summary>
-    /// Gets a collection of tag names found in the current neutral text that are operands or arguments to a specific instruction.
+    /// Retrieves the character at the specified position plus one in the given text,
+    /// or returns the minimum value of the <see cref="char"/> type if the index is out of range.
     /// </summary>
-    /// <param name="instruction">The instruction for which to find tags as arguments to.</param>
-    /// <returns>A <see cref="IEnumerable{T}"/> containing tag names found in the specified instruction.</returns>
-    public IEnumerable<TagName> TagsIn(string instruction) => Instructions(instruction).SelectMany(i => i.Text.Tags());
+    /// <param name="index">The base zero position of the character to peek at.</param>
+    /// <param name="text">The string from which the character is to be retrieved.</param>
+    /// <returns>The character at the position <paramref name="index"/> + 1 in the given string,
+    /// or <see cref="char.MinValue"/> if the position is out of the text's bounds.</returns>
+    private static char PeekNext(string text, int index) => index + 1 < text.Length ? text[index + 1] : char.MinValue;
 
-    /// <inheritdoc />
-    public override string ToString() => _text;
 
     /// <inheritdoc />
     public override bool Equals(object? obj)
     {
-        if (ReferenceEquals(this, obj)) return true;
-
         return obj switch
         {
-            NeutralText other => _text.IsEquivalent(other._text),
-            string other => _text.IsEquivalent(other),
+            string text => StringComparer.OrdinalIgnoreCase.Equals(_text, text),
+            NeutralText other => StringComparer.OrdinalIgnoreCase.Equals(_text, other._text),
             _ => false
         };
     }
@@ -173,53 +221,20 @@ public sealed class NeutralText : ILogixParsable<NeutralText>
     /// <inheritdoc />
     public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(_text);
 
-    /// <summary>
-    /// Determines if the provided objects are equal.
-    /// </summary>
-    /// <param name="left">An object to compare.</param>
-    /// <param name="right">An object to compare.</param>
-    /// <returns>true if the provided objects are equal; otherwise, false.</returns>
-    public static bool operator ==(NeutralText? left, NeutralText? right) => Equals(left, right);
+    /// <inheritdoc />
+    public override string ToString() => _text;
 
     /// <summary>
-    /// Determines if the provided objects are not equal.
+    /// Implicitly converts a <see cref="NeutralText"/> instance to its underlying <see cref="string"/> value.
     /// </summary>
-    /// <param name="left">An object to compare.</param>
-    /// <param name="right">An object to compare.</param>
-    /// <returns>true if the provided objects are not equal; otherwise, false.</returns>
-    public static bool operator !=(NeutralText? left, NeutralText? right) => !Equals(left, right);
+    /// <param name="text">The <see cref="NeutralText"/> instance to convert.</param>
+    /// <returns>The underlying string value of the <see cref="NeutralText"/>.</returns>
+    public static implicit operator string(NeutralText text) => text.ToString();
 
     /// <summary>
-    /// Converts a <c>NeutralText</c> object to a <c>string</c> object.
+    /// Implicitly converts a <see cref="string"/> value to a new <see cref="NeutralText"/> instance.
     /// </summary>
-    /// <param name="text">the <c>NeutralText</c> instance to convert.</param>
-    /// <returns>A <c>string</c> that represents the value of the <c>NeutralText</c>.</returns>
-    public static implicit operator string(NeutralText text) => text._text;
-
-    /// <summary>
-    /// Converts a <c>string</c> object to a <c>NeutralText</c> object.
-    /// </summary>
-    /// <param name="text">the <c>string</c> instance to convert.</param>
-    /// <returns>A <c>NeutralText</c> that represents the value of the <c>string</c>.</returns>
+    /// <param name="text">The string value to convert.</param>
+    /// <returns>A new <see cref="NeutralText"/> instance wrapping the provided string.</returns>
     public static implicit operator NeutralText(string text) => new(text);
-
-    private static bool TextIsBalanced(string value, char opening, char closing)
-    {
-        var characters = new Stack<char>();
-
-        foreach (var c in value)
-        {
-            if (Equals(c, opening))
-                characters.Push(c);
-
-            if (!Equals(c, closing)) continue;
-
-            if (characters.Count == 0)
-                return false;
-
-            characters.Pop();
-        }
-
-        return characters.Count == 0;
-    }
 }

@@ -1,7 +1,8 @@
 ﻿using System.Xml.Linq;
 using FluentAssertions;
 using L5Sharp.Tests.Core.Data.Custom;
-using L5Sharp.Tests.Core.Types.Custom;
+
+// ReSharper disable UseObjectOrCollectionInitializer
 
 namespace L5Sharp.Tests.Core.Components;
 
@@ -28,19 +29,19 @@ public class TagTests
         tag.DataType.Should().Be("NULL");
         tag.Dimensions.Should().Be(Dimensions.Empty);
         tag.Radix.Should().Be(Radix.Null);
-        tag.ExternalAccess.Should().Be(ExternalAccess.ReadWrite);
-        tag.Value.Should().Be(LogixData.Null);
+        tag.ExternalAccess.Should().Be(Access.ReadWrite);
+        tag.Value.Should().Be(LogixType.Null);
         tag.Constant.Should().BeFalse();
         tag.TagType.Should().Be(TagType.Base);
         tag.Usage.Should().BeNull();
         tag.AliasFor.Should().BeNull();
         tag.Alias.Should().BeNull();
         tag.Unit.Should().BeNull();
-        tag.Root.Should().BeSameAs(tag);
+        tag.Base.Should().BeSameAs(tag);
         tag.Parent.Should().BeNull();
         tag.TagName.Should().Be(TagName.Empty);
-        tag.Scope.Level.Should().Be(ScopeLevel.Null);
-        tag.Scope.IsScoped.Should().BeFalse();
+        tag.Comments.Should().BeNull();
+        tag.Units.Should().BeNull();
     }
 
     [Test]
@@ -51,7 +52,7 @@ public class TagTests
             Name = "Test",
             Description = "This is a test",
             Value = new BOOL(true),
-            ExternalAccess = ExternalAccess.ReadOnly,
+            ExternalAccess = Access.ReadOnly,
             TagType = TagType.Alias,
             Usage = TagUsage.Local,
             AliasFor = new TagName("SomeOtherTag"),
@@ -64,7 +65,7 @@ public class TagTests
         tag.DataType.Should().Be("BOOL");
         tag.Dimensions.Should().Be(Dimensions.Empty);
         tag.Radix.Should().Be(Radix.Decimal);
-        tag.ExternalAccess.Should().Be(ExternalAccess.ReadOnly);
+        tag.ExternalAccess.Should().Be(Access.ReadOnly);
         tag.Description.Should().Be("This is a test");
         tag.Constant.Should().BeTrue();
         tag.Usage.Should().Be(TagUsage.Local);
@@ -72,7 +73,7 @@ public class TagTests
         tag.AliasFor.Should().Be("SomeOtherTag");
         tag.TagName.Should().Be("Test");
         tag.Unit.Should().BeNull();
-        tag.Root.Should().BeSameAs(tag);
+        tag.Base.Should().BeSameAs(tag);
         tag.Parent.Should().BeNull();
     }
 
@@ -100,7 +101,6 @@ public class TagTests
     {
         var tag = new Tag { Name = "Test", Value = new TIMER() };
 
-        tag.Value.Should().BeOfType<TIMER>();
         tag.Value.As<TIMER>().PRE.Should().Be(0);
         tag.Value.As<TIMER>().ACC.Should().Be(0);
         tag.Value.As<TIMER>().DN.Should().Be(0);
@@ -126,7 +126,7 @@ public class TagTests
     {
         var tag = new Tag { Name = "Test", Value = new TIMER() };
 
-        var root = tag["DN"].Root;
+        var root = tag["DN"].Base;
 
         root.Should().NotBeNull();
         root.Should().BeSameAs(tag);
@@ -137,7 +137,7 @@ public class TagTests
     {
         var tag = new Tag { Name = "Test", Value = new MyNestedData() };
 
-        var root = tag["Simple.M1"].Root;
+        var root = tag["Simple.M1"].Base;
 
         root.Should().NotBeNull();
         root.Should().BeSameAs(tag);
@@ -162,21 +162,109 @@ public class TagTests
         var parent = tag["Simple.M1"].Parent;
 
         parent.Should().NotBeNull();
-        parent?.Value.Should().BeOfType<MySimpleData>();
-        parent?.TagName.Should().Be("Test.Simple");
+        parent.Value.Should().BeOfType<MySimpleData>();
+        parent.TagName.Should().Be("Test.Simple");
     }
 
     [Test]
     public void New_NamedComplexType_ShouldHaveExpectedDataTypeAndMembers()
     {
-        var tag = new Tag { Name = "Test", Value = new ComplexData("MyCustomType") };
+        var tag = new Tag { Name = "Test", Value = new StructureData("MyCustomType") };
 
-        tag.Add("Member01", new DINT(100));
-        tag.Add("Member02", new TIMER { PRE = 3000 });
-        tag.Add("Member03", new ComplexData("SubType"));
+        tag.AddMember("Member01", new DINT(100));
+        tag.AddMember("Member02", new TIMER { PRE = 3000 });
+        tag.AddMember("Member03", new StructureData("SubType"));
 
         tag.DataType.Should().Be("MyCustomType");
         tag.Members().Where(m => m.TagName.Depth == 1).Should().HaveCount(3);
+    }
+
+    [Test]
+    public Task Class_SetValidValue_ShouldBeVerified()
+    {
+        var tag = new Tag { Name = "Test", Class = ComponentClass.Safety, Value = 100 };
+
+        var xml = tag.Serialize().ToString();
+
+        return VerifyXml(xml);
+    }
+
+    [Test]
+    public void ToString_WhenCalled_ShouldReturnTagName()
+    {
+        var tag = new Tag { Name = "Test", Value = true };
+
+        tag.ToString().Should().Be("Test");
+    }
+
+    /*
+    [Test]
+    public void With_RootTagValidValue_ShouldUpdateValue()
+    {
+        var tag = new Tag { Name = "Test", Value = new DINT() };
+
+        var result = tag.With(new REAL(2.3f));
+
+        result.Should().NotBeNull();
+        result.Name.Should().Be("Test");
+        result.DataType.Should().Be("REAL");
+        result.Value.Should().BeOfType<REAL>();
+        result.Value.Should().Be(2.3f);
+    }
+
+    [Test]
+    public void With_NestedComplexType_ShouldHaveUpdatedValue()
+    {
+        var tag = new Tag { Name = "Test", Value = new MyNestedData() };
+
+        var member = tag["Simple.M4"];
+
+        var result = member.With(new REAL(2.3f));
+
+        result.Should().NotBeNull();
+        result.Name.Should().Be("Test");
+        result.TagName.Should().Be("Test.Simple.M4");
+        result.DataType.Should().Be("REAL");
+        result.Value.Should().BeOfType<REAL>();
+        result.Value.Should().Be(2.3f);
+    }*/
+
+    [Test]
+    public Task Duplicate_ValidConfig_ShouldBeVerified()
+    {
+        var content = TestContent.Test;
+        var tag = content.Get<Tag>(Known.Tag);
+
+        var duplicate = tag.Duplicate(t =>
+        {
+            t.Name = "NewSimpleTag";
+            t.Description = "This is an updated tag";
+            t["DintMember"].Value = 56203;
+            t["RealMember"].Value = 345.6f;
+        });
+
+        return Verify(duplicate.Serialize().ToString());
+    }
+
+    [Test]
+    public void Replace_NameProperty_ShouldBeVerified()
+    {
+        var tag = Tag.New<BOOL>("MyBoolTag");
+
+        tag.Replace("My", "Test", t => t.Name);
+
+        tag.Name.Should().StartWith("Test");
+    }
+
+    [Test]
+    public void Replace_DescriptionProperty_ShouldBeExpected()
+    {
+        var tag = Tag.New<TIMER>("SomeTimer");
+        tag.Description = "This is a test tag";
+
+        tag.Replace("test", "timer", t => t.Description);
+
+        tag.Description.Should().Contain("timer");
     }
 
     #endregion
@@ -204,10 +292,10 @@ public class TagTests
         tag.DataType.Should().Be("NULL");
         tag.Dimensions.Should().Be(Dimensions.Empty);
         tag.Radix.Should().Be(Radix.Null);
-        tag.ExternalAccess.Should().Be(ExternalAccess.ReadWrite);
+        tag.ExternalAccess.Should().Be(Access.ReadWrite);
         tag.TagType.Should().Be(TagType.Base);
         tag.Constant.Should().BeFalse();
-        tag.Value.Should().Be(LogixData.Null);
+        tag.Value.Should().Be(LogixType.Null);
     }
 
     [Test]
@@ -319,7 +407,6 @@ public class TagTests
         tag.Should().NotBeNull();
         tag.Name.Should().Be("TestTimer");
         tag.DataType.Should().Be("TIMER");
-        tag.Value.Should().BeOfType<TIMER>();
         tag["PRE"].Value.Should().Be(1000);
         tag["PRE"].Description.Should().Be("Test Timer PRE");
     }
@@ -335,8 +422,8 @@ public class TagTests
         tag.Name.Should().Be("TestSimpleTag");
         tag.DataType.Should().Be("SimpleType");
         tag.Constant.Should().BeFalse();
-        tag.ExternalAccess.Should().Be(ExternalAccess.ReadOnly);
-        tag.Value.Should().BeOfType<ComplexData>();
+        tag.ExternalAccess.Should().Be(Access.ReadOnly);
+        tag.Value.Should().BeOfType<StructureData>();
         tag.Member("BoolMember").Should().NotBeNull();
         tag.Member("SintMember").Should().NotBeNull();
         tag.Member("IntMember").Should().NotBeNull();
@@ -357,7 +444,7 @@ public class TagTests
         tag.DataType.Should().Be("ComplexType");
         tag.Dimensions.Should().Be(Dimensions.Empty);
         tag.Radix.Should().Be(Radix.Null);
-        tag.ExternalAccess.Should().Be(ExternalAccess.None);
+        tag.ExternalAccess.Should().Be(Access.None);
         tag.Constant.Should().BeFalse();
     }
 
@@ -406,8 +493,8 @@ public class TagTests
 
         tag.Value = new INT(43);
 
+        tag.Value.Should().Be(43);
         tag.Value.Should().BeOfType<DINT>();
-        tag.Value.As<DINT>().Should().Be(43);
     }
 
     [Test]
@@ -424,7 +511,6 @@ public class TagTests
             EN = 1,
         };
 
-        tag.Value.Should().BeOfType<TIMER>();
         tag.Value.As<TIMER>().PRE.Should().Be(5000);
         tag.Value.As<TIMER>().ACC.Should().Be(1234);
         tag.Value.As<TIMER>().DN.Should().Be(1);
@@ -438,7 +524,7 @@ public class TagTests
         var tag = new Tag { Name = "Test", Value = new TIMER() };
 
         //Name does not matter just the members
-        tag.Value = new ComplexData("Test", new List<Member>
+        tag.Value = new StructureData("Test", new List<LogixMember>
         {
             new("PRE", 5000),
             new("ACC", 1234),
@@ -447,7 +533,6 @@ public class TagTests
             new("EN", 1),
         });
 
-        tag.Value.Should().BeOfType<TIMER>();
         tag.Value.As<TIMER>().PRE.Should().Be(5000);
         tag.Value.As<TIMER>().ACC.Should().Be(1234);
         tag.Value.As<TIMER>().DN.Should().Be(1);
@@ -471,15 +556,18 @@ public class TagTests
     [Test]
     public void SetValue_StructureArrayType_ShouldHaveExpectedValues()
     {
-        var tag = new Tag { Name = "Test", Value = new TIMER[] { new(), new(), new(), new() } };
+        var tag = new Tag { Name = "Test", Value = new ArrayData<TIMER>(4) };
 
-        //array length does not matter. indices will be join on what is available.
-        tag.Value = new TIMER[] { new() { PRE = 100 }, new() { PRE = 200 }, new() { PRE = 300 } };
+        tag.Value = new ArrayData<TIMER>([
+            new TIMER { PRE = 100 },
+            new TIMER { PRE = 200 },
+            new TIMER { PRE = 300 }
+        ]);
 
-        tag.Value.As<ArrayData>()[0].As<TIMER>().PRE.Should().Be(100);
-        tag.Value.As<ArrayData>()[1].As<TIMER>().PRE.Should().Be(200);
-        tag.Value.As<ArrayData>()[2].As<TIMER>().PRE.Should().Be(300);
-        tag.Value.As<ArrayData>()[3].As<TIMER>().PRE.Should().Be(0);
+        tag.Value.As<ArrayData<TIMER>>().Should().HaveCount(4);
+        tag.Value.As<ArrayData<TIMER>>()[0].PRE.Should().Be(100);
+        tag.Value.As<ArrayData<TIMER>>()[1].PRE.Should().Be(200);
+        tag.Value.As<ArrayData<TIMER>>()[2].PRE.Should().Be(300);
     }
 
     [Test]
@@ -487,7 +575,7 @@ public class TagTests
     {
         var tag = new Tag { Name = "Test", Value = new TIMER() };
 
-        FluentActions.Invoking(() => tag.Value = new REAL(43)).Should().Throw<InvalidCastException>();
+        FluentActions.Invoking(() => tag.Value = new REAL(43)).Should().Throw<ArgumentException>();
     }
 
     [Test]
@@ -521,7 +609,7 @@ public class TagTests
         {
             { "PRE", 5000 },
             { "ACC", 1234 },
-            { "DN", true },
+            { "DN", true }
         };
 
         tag.Value.As<TIMER>().PRE.Should().Be(5000);
@@ -718,7 +806,7 @@ public class TagTests
             Value = new MyNestedData()
         };
 
-        var members = tag.Members(t => t.Members.Count() > 2);
+        var members = tag.Members((TagName t) => t.Members().Count() > 2);
 
         members.Should().NotBeEmpty();
     }
@@ -732,7 +820,7 @@ public class TagTests
             Value = new MyNestedData()
         };
 
-        var members = tag.Members(t => TagName.Equals(t, "M1", TagNameComparer.Member));
+        var members = tag.Members(t => t.MemberName == "M1");
 
         members.Should().HaveCount(1);
     }
@@ -824,6 +912,63 @@ public class TagTests
         comment.Should().Be("TIMER TAG");
     }
 
+    [Test]
+    public void GetDescription_FromUserDefinedWithPassThroughEnabledWithAppend_ShouldHavePassThroughDescription()
+    {
+        const string expectedBase = "Base";
+        var expectedMember = string.Concat(expectedBase, " ", "Test Bool");
+        var content = TestContent.Test;
+        content.Controller.PassThroughConfiguration = PassThroughOption.EnabledWithAppend;
+
+        var tag = content.Get<Tag>("TestComplexTag");
+
+        tag.Description.Should().Be(expectedBase);
+        tag["SimpleMember.BoolMember"].Description.Should().Be(expectedMember);
+    }
+
+    [Test]
+    public void GetDescription_ComplexArrayElementWithPassThroughEnabledWithAppend_ShouldHavePassThroughDescription()
+    {
+        const string expectedBase = "Base";
+        var expectedMember = string.Concat(expectedBase, " ",
+            "This is a test data type that contains simple atomic types with an updated description"
+        );
+        var content = TestContent.Test;
+        content.Controller.PassThroughConfiguration = PassThroughOption.EnabledWithAppend;
+
+        var tag = content.Get<Tag>("TestComplexTag");
+
+        tag.Description.Should().Be(expectedBase);
+        tag["SimplArray[0]"].Description.Should().Be(expectedMember);
+    }
+
+    [Test]
+    public void GetDescription_FromUserDefinedWithPassThroughEnabled_ShouldHavePassThroughDescription()
+    {
+        const string expectedBase = "Base";
+        const string expectedMember = "Test Bool";
+        var content = TestContent.Test;
+        content.Controller.PassThroughConfiguration = PassThroughOption.Enabled;
+
+        var tag = content.Get<Tag>("TestComplexTag");
+
+        tag.Description.Should().Be(expectedBase);
+        tag["SimpleMember.BoolMember"].Description.Should().Be(expectedMember);
+    }
+
+    [Test]
+    public void GetDescription_FromUserDefinedWithPassThroughDisabled_ShouldHavePassThroughDescription()
+    {
+        var content = TestContent.Test;
+        content.Controller.PassThroughConfiguration = PassThroughOption.Disabled;
+
+        var tag = content.Get<Tag>("TestComplexTag");
+        tag.Description = null; //clear just in case
+
+        tag.Description.Should().BeNull();
+        tag["SimpleMember.BoolMember"].Description.Should().BeNull();
+    }
+
     #endregion
 
     #region CommentsTests
@@ -834,11 +979,11 @@ public class TagTests
         // ReSharper disable once UseObjectOrCollectionInitializer
         var tag = new Tag("Test", 100);
 
-        tag.Comments = new LogixContainer<Comment>
-        {
-            new(".1", "This is the comment"),
-            new(".2", "this is another comment")
-        };
+        tag.Comments =
+        [
+            new Comment(".1", "This is the comment"),
+            new Comment(".2", "this is another comment")
+        ];
 
         tag.Comments.Should().HaveCount(2);
     }
@@ -846,14 +991,13 @@ public class TagTests
     [Test]
     public Task Comments_ValidCollection_ShouldBeVerified()
     {
-        // ReSharper disable once UseObjectOrCollectionInitializer
         var tag = new Tag("Test", 100, "This is a test tag");
 
-        tag.Comments = new LogixContainer<Comment>
-        {
-            new(".1", "This is the comment"),
-            new(".2", "this is another comment")
-        };
+        tag.Comments =
+        [
+            new Comment(".1", "This is the comment"),
+            new Comment(".2", "this is another comment")
+        ];
 
         var xml = tag.Serialize().ToString();
 
@@ -862,53 +1006,233 @@ public class TagTests
 
     #endregion
 
-    [Test]
-    public void ToString_WhenCalled_ShouldReturnTagName()
-    {
-        var tag = new Tag { Name = "Test", Value = true };
+    #region BuilderTests
 
-        tag.ToString().Should().Be("Test");
+    [Test]
+    public void New_AtomicTypeAndName_ShouldBeExpected()
+    {
+        var tag = Tag.New<DINT>("TestTag");
+
+        tag.Name.Should().Be("TestTag");
+        tag.Value.Should().NotBeNull();
+        tag.Value.Should().BeOfType<DINT>();
+        tag.Value.Should().Be(0);
     }
 
     [Test]
-    public void New_ValidParameters_ShouldBeExpected()
+    public void New_ComplexTypeAndName_ShouldBeExpected()
     {
         var tag = Tag.New<TIMER>("MyTimer");
 
         tag.Name.Should().Be("MyTimer");
-        tag.Value.Should().BeOfType<TIMER>();
+        tag.Value.Should().NotBeNull();
+        tag.Value.Should().NotBe(LogixType.Null);
     }
 
     [Test]
-    public void With_RootTagValidValue_ShouldUpdateValue()
+    public void New_ArrayOfAtomicData_ShouldBeExpected()
     {
-        var tag = new Tag { Name = "Test", Value = new DINT() };
+        var tag = Tag.New<DINT>("ArrayTag", 10);
 
-        var result = tag.With(new REAL(2.3f));
-
-        result.Should().NotBeNull();
-        result.Name.Should().Be("Test");
-        result.DataType.Should().Be("REAL");
-        result.Value.Should().BeOfType<REAL>();
-        result.Value.Should().Be(2.3f);
+        tag.Name.Should().Be("ArrayTag");
+        tag.Dimensions.Should().Be(10);
+        tag.Value.Should().NotBeNull();
+        tag.Value.Should().BeOfType<ArrayData>();
     }
 
     [Test]
-    public void With_NestedComplexType_ShouldHaveUpdatedValue()
+    public void Build_SimpleAtomicTypeWithValue_ShouldHaveExpectedValues()
     {
-        var tag = new Tag { Name = "Test", Value = new MyNestedData() };
+        var tag = Tag.Named("SomeAtomic")
+            .WithValue(123)
+            .Build();
 
-        var member = tag["Simple.M4"];
-
-        var result = member.With(new REAL(2.3f));
-
-        result.Should().NotBeNull();
-        result.Name.Should().Be("Test");
-        result.TagName.Should().Be("Test.Simple.M4");
-        result.DataType.Should().Be("REAL");
-        result.Value.Should().BeOfType<REAL>();
-        result.Value.Should().Be(2.3f);
+        tag.Name.Should().Be("SomeAtomic");
+        tag.DataType.Should().Be("DINT");
+        tag.Value.Should().Be(123);
+        tag.Radix.Should().Be(Radix.Decimal);
+        tag.ExternalAccess.Should().Be(Access.ReadWrite);
+        tag.TagType.Should().Be(TagType.Base);
     }
+
+    [Test]
+    public void Build_SimpleNoneAccess_ShouldHaveExpectedAccess()
+    {
+        var tag = Tag.Named("SomeAtomic")
+            .WithAccess(Access.None)
+            .Build();
+
+        tag.ExternalAccess.Should().Be(Access.None);
+    }
+
+    [Test]
+    public void Build_SimpleReadOnlyAccess_ShouldHaveExpectedAccess()
+    {
+        var tag = Tag.Named("SomeAtomic")
+            .ReadOnly()
+            .Build();
+
+        tag.ExternalAccess.Should().Be(Access.ReadOnly);
+    }
+
+    [Test]
+    public void Build_SimpleReadWriteAccess_ShouldHaveExpectedAccess()
+    {
+        var tag = Tag.Named("SomeAtomic")
+            .ReadWrite()
+            .Build();
+
+        tag.ExternalAccess.Should().Be(Access.ReadWrite);
+    }
+
+    [Test]
+    public void Build_SimpleWithUsage_ShouldHaveExpectedAccess()
+    {
+        var tag = Tag.Named("SomeAtomic")
+            .WithUsage(TagUsage.Public)
+            .Build();
+
+        tag.Usage.Should().Be(TagUsage.Public);
+    }
+
+    [Test]
+    public void Build_SimpleWithNormalUsage_ShouldHaveExpectedAccess()
+    {
+        var tag = Tag.Named("SomeAtomic")
+            .Normal()
+            .Build();
+
+        tag.Usage.Should().Be(TagUsage.Normal);
+    }
+
+    [Test]
+    public void Build_SimpleWithDescription_ShouldHaveExpectedDescription()
+    {
+        var tag = Tag.Named("SomeAtomic")
+            .WithDescription("This is a test of the fluent tag builder")
+            .Build();
+
+        tag.Description.Should().Be("This is a test of the fluent tag builder");
+    }
+
+    [Test]
+    public void Build_SimpleConstant_ShouldHaveExpectedConstant()
+    {
+        var tag = Tag.Named("SomeAtomic")
+            .Constant()
+            .Build();
+
+        tag.Constant.Should().BeTrue();
+    }
+
+    [Test]
+    public void Build_SimpleConsumer_ShouldHaveExpectedInfo()
+    {
+        var tag = Tag.Named("ConsumerTag")
+            .Consumes(cb => cb
+                .Provider("RemoteProviderName")
+                .RemoteTag("RemoteTagName.Member.Value")
+                .RPI(100)
+                .Unicast()
+            )
+            .Build();
+
+        tag.Name.Should().Be("ConsumerTag");
+        tag.TagType.Should().Be(TagType.Consumed);
+        tag.ConsumeInfo.Should().NotBeNull();
+        tag.ConsumeInfo?.Producer.Should().Be("RemoteProviderName");
+        tag.ConsumeInfo?.RemoteTag.Should().Be("RemoteTagName.Member.Value");
+        tag.ConsumeInfo?.RPI.Should().Be(100);
+        tag.ConsumeInfo?.Unicast.Should().BeTrue();
+    }
+
+    [Test]
+    public void Build_SimpleProducer_ShouldHaveExpectedInfo()
+    {
+        var tag = Tag.Named("ProducerTag")
+            .Produces(b => b
+                .WithMaxCount(5)
+                .SendEventTrigger()
+                .Unicast()
+            )
+            .Build();
+
+        tag.Name.Should().Be("ProducerTag");
+        tag.TagType.Should().Be(TagType.Produced);
+        tag.ProduceInfo.Should().NotBeNull();
+        tag.ProduceInfo?.ProduceCount.Should().Be(5);
+        tag.ProduceInfo?.ProgrammaticallySendEventTrigger.Should().BeTrue();
+        tag.ProduceInfo?.UnicastPermitted.Should().BeTrue();
+    }
+
+    [Test]
+    public Task Build_SimpleAliasTag_ShouldBeVerified()
+    {
+        var tag = Tag.Named("MyTagName")
+            .AliasFor("SomeOtherTag")
+            .Build();
+
+        return VerifyXml(tag.Serialize().ToString());
+    }
+
+    [Test]
+    public Task Build_PredefinedTypeDefaultValue_ShouldBeVerified()
+    {
+        var tag = Tag.Named("MyTagName")
+            .WithValue<TIMER>()
+            .WithDescription("Builder example of creating a complex predefined data type with default data.")
+            .Build();
+
+        return VerifyXml(tag.Serialize().ToString());
+    }
+
+    [Test]
+    public Task Build_PredefinedTypeConfiguredValue_ShouldBeVerified()
+    {
+        var tag = Tag.Named("MyTagName")
+            .WithValue<TIMER>(t =>
+            {
+                t.PRE = 10000;
+                t.ACC = 1234;
+                t.DN = true;
+                t.EN = true;
+            })
+            .WithDescription("Builder example of creating a complex predefined data type with configured data.")
+            .Build();
+
+        return VerifyXml(tag.Serialize().ToString());
+    }
+
+    [Test]
+    public Task Build_UserDefinedTypeDefaultValue_ShouldBeVerified()
+    {
+        var tag = Tag.Named("MyTagName")
+            .WithValue<MyNestedData>()
+            .WithDescription("Builder example of creating a complex user defined data type with defualt data.")
+            .Build();
+
+        return VerifyXml(tag.Serialize().ToString());
+    }
+
+    [Test]
+    public Task Build_UserDefinedTypeConfiguredValue_ShouldBeVerified()
+    {
+        var tag = Tag.Named("MyTagName")
+            .WithValue<MyNestedData>(d =>
+            {
+                d.Simple.M2 = 123;
+                d.Tmr.PRE = 12345;
+                d.Flags[5] = true;
+                d.Counters[1].PRE = 4;
+                d.Names[3] = "This is a complex test";
+            })
+            .WithDescription("Builder example of creating a complex user defined data type and setting member value.")
+            .Build();
+
+        return VerifyXml(tag.Serialize().ToString());
+    }
+
+    #endregion
 
     #region ProduceConsumeTests
 
@@ -953,13 +1277,29 @@ public class TagTests
 
     #endregion
 
+    #region ReferencesTests
+
     [Test]
-    public Task Class_SetValidValue_ShouldBeVerified()
+    [Explicit("Requires usage of local test file that is not in remote project")]
+    public void References_ForAllTagsExampleFile_ShouldNotTakeForever()
     {
-        var tag = new Tag { Name = "Test", Class = ComponentClass.Safety, Value = 100 };
+        var content = TestContent.Example;
 
-        var xml = tag.Serialize().ToString();
+        var result = content.Query<Tag>().SelectMany(t => t.Members()).SelectMany(t => t.References()).ToList();
 
-        return VerifyXml(xml);
+        result.Should().NotBeEmpty();
     }
+
+    [Test]
+    [Explicit("Requires usage of local test file that is not in remote project")]
+    public void TagCount()
+    {
+        var content = TestContent.Example;
+
+        var tags = content.Query<Tag>().ToList();
+
+        Console.WriteLine(tags.Count);
+    }
+
+    #endregion
 }

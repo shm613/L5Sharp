@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 
 namespace L5Sharp.Tests.Core.Common;
 
@@ -6,11 +6,19 @@ namespace L5Sharp.Tests.Core.Common;
 public class ArgumentTests
 {
     [Test]
+    public void New_NullValue_ShouldThrowException()
+    {
+        FluentActions.Invoking(() => new Argument(null!)).Should().Throw<ArgumentException>();
+    }
+
+    [Test]
     public void Empty_WhenCalled_ShouldHaveExpectedValue()
     {
         var argument = Argument.Empty;
 
         argument.Should().Be(string.Empty);
+        argument.Type.Should().Be(ArgumentType.Empty);
+        argument.IsValid.Should().BeFalse();
     }
 
     [Test]
@@ -19,200 +27,139 @@ public class ArgumentTests
         var argument = Argument.Unknown;
 
         argument.Should().Be("?");
+        argument.Type.Should().Be(ArgumentType.Unknown);
+        argument.IsValid.Should().BeFalse();
     }
 
     [Test]
-    public void IsAtomic_AtomicArgument_ShouldBeTrue()
+    public void New_AtomicArgument_ShouldBeExpected()
     {
         Argument argument = 100;
 
+        argument.Should().Be("100");
+        argument.Type.Should().Be(ArgumentType.Atomic);
+        argument.IsLiteral.Should().BeTrue();
         argument.IsAtomic.Should().BeTrue();
     }
 
     [Test]
-    public void IsAtomic_NonAtomicArgument_ShouldBeFalse()
+    public void New_SimpleNameArgument_ShouldBeExpected()
     {
-        Argument argument = "Test";
+        Argument argument = "MyComponent";
 
-        argument.IsAtomic.Should().BeFalse();
+        argument.Should().Be("MyComponent");
+        argument.Type.Should().Be(ArgumentType.Reference);
+        argument.IsReference.Should().BeTrue();
     }
 
     [Test]
-    public void IsExpression_ExpressionArgument_ShouldBeTrue()
+    public void New_ComplexTagArgument_ShouldBeExpected()
     {
-        Argument argument = "XIC(MyTagName.Member[1].Active)";
+        Argument argument = "MyTagName.Member[1].Active.1";
 
+        argument.Should().Be("MyTagName.Member[1].Active.1");
+        argument.Type.Should().Be(ArgumentType.Reference);
+        argument.IsReference.Should().BeTrue();
+    }
+
+    [Test]
+    public void New_StringArgument_ShouldBeExpected()
+    {
+        Argument argument = "'This is a test string'";
+
+        argument.Should().Be("'This is a test string'");
+        argument.Type.Should().Be(ArgumentType.String);
+        argument.IsLiteral.Should().BeTrue();
+        argument.IsString.Should().BeTrue();
+    }
+
+    [Test]
+    public void New_ExpressionArgument_ShouldBeExpected()
+    {
+        Argument argument = "SomeTag.Value > 100";
+
+        argument.Should().Be("SomeTag.Value > 100");
+        argument.Type.Should().Be(ArgumentType.Expression);
         argument.IsExpression.Should().BeTrue();
     }
 
-    [Test]
-    public void IsExpression_NonExpressionArgument_ShouldBeFalse()
+    [TestCase("", "Empty")]
+    [TestCase("?", "Unknown")]
+    [TestCase(" ", "Unknown")]
+    [TestCase("!!", "Unknown")]
+    // Atomic (Numeric and Radix formats)
+    [TestCase("12345", "Atomic")]
+    [TestCase("2#0010_0110", "Atomic")]
+    [TestCase("8#77", "Atomic")]
+    [TestCase("16#ABCD", "Atomic")]
+    [TestCase("1.23", "Atomic")]
+    [TestCase("1.23e10", "Atomic")]
+    [TestCase("T#2h_30m", "Atomic")]
+    [TestCase("DT#2023-01-01-12:00:00.000000Z", "Atomic")]
+    // String Literals
+    [TestCase("'Test String'", "String")]
+    [TestCase("''", "String")]
+    [TestCase("'String with $P symbols'", "String")]
+    // Reference (Tags and System Components)
+    [TestCase("MyTagName.Member[1].Active.1", "Reference")]
+    [TestCase("Program:MainProgram.LocalTag", "Reference")]
+    [TestCase("MyArray[1,2,3]", "Reference")]
+    [TestCase("MyTag[NestedTag].MemberName", "Reference")] // Indirect addressing
+    [TestCase("Module:1:I.Data", "Reference")] // System/Module reference
+    [TestCase("FAULTLOG", "Reference")] // System component
+    // Expression
+    [TestCase("ABS(MyTagName) >= 1000", "Expression")]
+    [TestCase("(Value1 + Value2) * 10", "Expression")]
+    [TestCase("Value1 / 2", "Expression")]
+    [TestCase("Value1 < Value2", "Expression")]
+    [TestCase("Value1 = 1", "Expression")]
+    public void Type_WhenCalled_ShouldHaveExpectedValue(string value, string expected)
     {
-        Argument argument = "MyTagName.Member[1].Active.1";
+        var argument = new Argument(value);
 
-        argument.IsExpression.Should().BeFalse();
+        var type = argument.Type;
+
+        type.Should().Be(ArgumentType.Parse(expected));
     }
 
     [Test]
-    public void IsImmediate_AtomicArgument_ShouldBeTrue()
+    public void ToAtomic_ValidAtomicValue_ShouldBeExpected()
     {
-        Argument argument = 100;
+        Argument argument = "123";
 
-        argument.IsImmediate.Should().BeTrue();
+        var atomic = argument.ToAtomic();
+
+        atomic.Should().NotBeNull();
+        atomic.ToString().Should().Be("123");
     }
 
     [Test]
-    public void IsImmediate_StringArgument_ShouldBeTrue()
+    public void ToAtomic_RealValue_ShouldBeExpected()
     {
-        Argument argument = "'Constant'";
+        Argument argument = "1.23";
 
-        argument.IsImmediate.Should().BeTrue();
+        var atomic = argument.ToAtomic();
+
+        atomic.Should().NotBeNull();
+        atomic.ToString().Should().Be("1.23");
     }
 
     [Test]
-    public void IsImmediate_TagNameArgument_ShouldBeFalse()
+    public void ToAtomic_NonAtomicValue_ShouldThrowException()
     {
-        Argument argument = "MyTagName.Member[1].Active.1";
+        Argument argument = "TagName";
 
-        argument.IsImmediate.Should().BeFalse();
+        FluentActions.Invoking(argument.ToAtomic).Should().Throw<Exception>();
     }
 
     [Test]
-    public void IsTag_TagArgument_ShouldBeTrue()
+    public void ToNeutralText_WhenCalled_ShouldBeExpected()
     {
-        Argument argument = "MyTagName.Member[1].Active.1";
+        Argument argument = "SomeTag > 100";
 
-        argument.IsTag.Should().BeTrue();
-    }
+        var text = argument.ToNeutralText();
 
-    [Test]
-    public void IsTag_AtomicArgument_ShouldBeFalse()
-    {
-        Argument argument = true;
-
-        argument.IsTag.Should().BeFalse();
-    }
-
-    [Test]
-    public void IsString_StringArgument_ShouldBeTrue()
-    {
-        Argument argument = "'Constant'";
-
-        argument.IsString.Should().BeTrue();
-    }
-
-    [Test]
-    public void IsString_AtomicArgument_ShouldBeFalse()
-    {
-        Argument argument = 1.23;
-
-        argument.IsString.Should().BeFalse();
-    }
-
-    [Test]
-    public void Parse_Null_ShouldBeEmpty()
-    {
-        FluentActions.Invoking(() => Argument.Parse(null)).Should().Throw<ArgumentException>();
-    }
-
-    [Test]
-    public void Parse_EmptyString_ShouldThrowException()
-    {
-        FluentActions.Invoking(() => Argument.Parse(string.Empty)).Should().Throw<ArgumentException>();
-    }
-
-    [Test]
-    public void Parse_QuestionMark_ShouldBeUnknown()
-    {
-        var argument = Argument.Parse("?");
-
-        argument.Should().Be("?");
-    }
-
-    [Test]
-    public void Parse_StringLiteral_ShouldHaveExpectedValueAndType()
-    {
-        var argument = Argument.Parse("'Test String'");
-
-        argument.Should().NotBeNull();
-        argument.IsString.Should().BeTrue();
-        argument.Should().Be("'Test String'");
-    }
-
-    [Test]
-    public void Parse_AtomicDecimalRadix_ShouldHaveExpectedValueAndType()
-    {
-        var argument = Argument.Parse("100");
-
-        argument.Should().NotBeNull();
-        argument.IsAtomic.Should().BeTrue();
-        argument.Should().Be(100);
-    }
-
-    [Test]
-    public void Parse_AtomicBinaryRadix_ShouldHaveExpectedValueAndType()
-    {
-        var argument = Argument.Parse("2#0010_0110");
-
-        argument.Should().NotBeNull();
-        argument.IsAtomic.Should().BeTrue();
-        argument.Should().Be(38);
-    }
-
-    [Test]
-    public void TagName_ValidTagName_ShouldHaveExpectedValueAndType()
-    {
-        var argument = Argument.Parse("MyTagName.Member[1].Active.1");
-
-        argument.Should().NotBeNull();
-        argument.IsTag.Should().BeTrue();
-        argument.Should().Be("MyTagName.Member[1].Active.1");
-    }
-
-    [Test]
-    public void Tags_ArgumentWithSingleTag_ShouldHaveExpectedCount()
-    {
-        var argument = Argument.Parse("MyTagName.Member[1].Active.1");
-
-        var tags = argument.Tags;
-
-        tags.Should().HaveCount(1);
-    }
-
-    [Test]
-    public void Tags_ExpressionArgumentMultipleTags_ShouldHaveExpectedCount()
-    {
-        Argument argument = "CMP(MyTagName.Member[1].Active >= MyConstant)";
-
-        var tags = argument.Tags;
-
-        tags.Should().HaveCount(2);
-    }
-
-    [Test]
-    public void Values_ArgumentSingleAtomic_ShouldHaveExpectedCount()
-    {
-        Argument argument = 100;
-
-        var values = argument.Values;
-
-        values.Should().HaveCount(1);
-    }
-
-    [Test]
-    public void ImplicitConversion_TagName_ShouldNotBeExpected()
-    {
-        Argument argument = new TagName("Test");
-
-        argument.Should().NotBeNull();
-        argument.Should().Be("Test");
-    }
-
-    [Test]
-    public void ImplicitOperator_Int_ShouldNotBeBeExpected()
-    {
-        Argument argument = 100;
-
-        argument.Should().Be(100);
+        text.Should().NotBeNull();
+        text.ToString().Should().Be("SomeTag > 100");
     }
 }

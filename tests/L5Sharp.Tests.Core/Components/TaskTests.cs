@@ -26,7 +26,7 @@ namespace L5Sharp.Tests.Core.Components
             task.Watchdog.Should().Be(new Watchdog(500));
             task.InhibitTask.Should().BeFalse();
             task.DisableUpdateOutputs.Should().BeFalse();
-            task.Scheduled.Should().BeEmpty();
+            task.ScheduledPrograms.Should().BeEmpty();
         }
 
         [Test]
@@ -52,7 +52,7 @@ namespace L5Sharp.Tests.Core.Components
             task.Watchdog.Should().Be(new Watchdog(501));
             task.InhibitTask.Should().BeTrue();
             task.DisableUpdateOutputs.Should().BeTrue();
-            task.Scheduled.Should().BeEmpty();
+            task.ScheduledPrograms.Should().BeEmpty();
         }
 
         [Test]
@@ -62,7 +62,7 @@ namespace L5Sharp.Tests.Core.Components
 
             task.Name.Should().Be("Test");
         }
-        
+
         [Test]
         public void New_NameAndTypeOverload_ShouldHaveExpectedName()
         {
@@ -95,9 +95,9 @@ namespace L5Sharp.Tests.Core.Components
         {
             var task = new LTask();
 
-            task.Schedule("Test");
+            task.ScheduledPrograms.Add(new ScheduledProgram("Test"));
 
-            task.Scheduled.Should().HaveCount(1);
+            task.ScheduledPrograms.Should().HaveCount(1);
         }
 
         [Test]
@@ -105,11 +105,11 @@ namespace L5Sharp.Tests.Core.Components
         {
             var task = new LTask();
 
-            task.Schedule("Test");
-            task.Scheduled.Should().HaveCount(1);
+            task.ScheduledPrograms.Add("Test");
+            task.ScheduledPrograms.Should().HaveCount(1);
 
-            task.Cancel("Test");
-            task.Scheduled.Should().BeEmpty();
+            task.ScheduledPrograms.Remove("Test");
+            task.ScheduledPrograms.Should().BeEmpty();
         }
 
         [Test]
@@ -137,10 +137,10 @@ namespace L5Sharp.Tests.Core.Components
                 DisableUpdateOutputs = true
             };
 
-            task.Schedule("Program1");
-            task.Schedule("Test");
-            task.Schedule("Another");
-            task.Schedule("Another");
+            task.ScheduledPrograms.Add("Program1");
+            task.ScheduledPrograms.Add("Test");
+            task.ScheduledPrograms.Add("Another");
+            task.ScheduledPrograms.Add("Another");
 
             var xml = task.Serialize().ToString();
 
@@ -150,19 +150,30 @@ namespace L5Sharp.Tests.Core.Components
         [Test]
         public Task AddProgram_ValidProgram_ShouldBeVerified()
         {
-            var content = L5X.New("Test", "1756-L84E", new Revision(33, 1));
+            var content = L5X.Empty();
             var task = new LTask("Test");
             content.Tasks.Add(task);
             var program = new Program("Program1");
             task.AddProgram(program);
 
-            var xml = content.Serialize().ToString();
+            var xml = content.ToString();
 
             return VerifyXml(xml)
                 .IgnoreMember("ProjectCreationDate")
                 .IgnoreMember("LastModifiedDate")
                 .IgnoreMember("ExportDate")
                 .IgnoreMember("Owner");
+        }
+
+        [Test]
+        public void References_KnownTest_ShouldNotBeEmpty()
+        {
+            var content = TestContent.Test;
+            var task = content.Get<LTask>("Event");
+
+            var references = task.References().ToArray();
+
+            references.Should().HaveCount(1);
         }
     }
 }
